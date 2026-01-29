@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Text, LargeBinary
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -47,12 +47,23 @@ class Video(Base):
     channel = relationship("Channel", back_populates="videos")
     chunks = relationship("AudioChunk", back_populates="video")
 
+class Speaker(Base):
+    __tablename__ = "speakers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    embedding = Column(LargeBinary, nullable=False)  # Store numpy array as binary
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    chunks = relationship("AudioChunk", back_populates="speaker")
+
 class AudioChunk(Base):
     __tablename__ = "audio_chunks"
 
     id = Column(Integer, primary_key=True, index=True)
     chunk_id = Column(String(255), unique=True, index=True)
     video_id = Column(Integer, ForeignKey("videos.id"))
+    speaker_id = Column(Integer, ForeignKey("speakers.id"), nullable=True)
     file_path = Column(String(500))
     duration = Column(Float)
     start_time = Column(Float)
@@ -61,6 +72,7 @@ class AudioChunk(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     video = relationship("Video", back_populates="chunks")
+    speaker = relationship("Speaker", back_populates="chunks")
 
 class Job(Base):
     __tablename__ = "jobs"

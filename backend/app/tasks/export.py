@@ -69,7 +69,9 @@ def export_dataset_task(self, job_id: int, repo_id: Optional[str] = None, hf_tok
                     "duration": chunk.duration,
                     "original_video_id": chunk.video.video_id,
                     "channel_name": channel_name,
-                    "channel_url": channel.url
+                    "channel_url": channel.url,
+                    "speaker_id": chunk.speaker_id if chunk.speaker_id else None,
+                    "speaker_name": chunk.speaker.name if chunk.speaker else None
                 })
             
             chunks_by_channel[channel_name] = chunks_data

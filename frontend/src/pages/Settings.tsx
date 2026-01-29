@@ -12,7 +12,8 @@ const Settings = () => {
         retry_count: 3,
         transcription_prompt: "",
         vad_threshold: 0.25,
-        min_speech_duration_ms: 250
+        min_speech_duration_ms: 250,
+        speaker_similarity_threshold: 0.75
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -190,6 +191,27 @@ const Settings = () => {
                         />
                         <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.5rem' }}>
                             Instructions for the AI model on how to transcribe the audio.
+                        </small>
+                    </div>
+
+                    <hr style={{ borderColor: 'var(--border)', margin: '1rem 0' }} />
+
+                    <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--primary)' }}>Speaker Identification</h3>
+
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Speaker Similarity Threshold (0.0 - 1.0)</label>
+                        <input
+                            name="speaker_similarity_threshold"
+                            type="number"
+                            step="0.05"
+                            min="0"
+                            max="1"
+                            value={settings.speaker_similarity_threshold}
+                            onChange={handleChange}
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--bg-accent)', color: 'white' }}
+                        />
+                        <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.5rem' }}>
+                            Threshold for matching voices to speakers. Higher = more unique speakers created (0.85-0.95 conservative, 0.60-0.75 aggressive grouping).
                         </small>
                     </div>
 

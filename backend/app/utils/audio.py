@@ -3,9 +3,13 @@ from pydub import AudioSegment, silence
 from typing import List, Dict, Any
 import logging
 import time
+import threading
 
 logger = logging.getLogger(__name__)
 logger.info("audio.py module loaded")
+
+# Thread lock for VAD model access (needed with threads pool)
+_vad_lock = threading.Lock()
 
 def load_audio_as_tensor(audio_path: str, sampling_rate: int = 16000):
     """
@@ -72,15 +76,20 @@ def split_audio_on_vad(
         
         logger.info(f"Running VAD on {audio_path} ({len(wav)/sample_rate:.2f}s)...")
         # Get speech timestamps using VAD with inference mode for speed
-        with torch.inference_mode():
-            speech_timestamps = get_speech_timestamps(
-                wav,
-                model,
-                sampling_rate=sample_rate,
-                threshold=vad_threshold, # Dynamic threshold
-                min_speech_duration_ms=min_speech_duration_ms,
-                min_silence_duration_ms=min_silence_len
-            )
+        # Use thread lock to prevent state corruption in threads pool
+        with _vad_lock:
+            # Reset model state to prevent contamination from previous calls
+            model.reset_states()
+            
+            with torch.inference_mode():
+                speech_timestamps = get_speech_timestamps(
+                    wav,
+                    model,
+                    sampling_rate=int(sample_rate),  # Ensure int type
+                    threshold=float(vad_threshold),  # Ensure float32 type
+                    min_speech_duration_ms=int(min_speech_duration_ms),  # Ensure int type
+                    min_silence_duration_ms=int(min_silence_len)  # Ensure int type
+                )
         logger.info(f"VAD completed, found {len(speech_timestamps)} segments.")
         
         # Convert timestamps from samples to milliseconds for consistency with Pydub
@@ -242,16 +251,20 @@ def validate_speech(audio_path: str, min_speech_ratio: float = 0.2) -> bool:
         # Read audio using robust Pydub loader
         wav = load_audio_as_tensor(audio_path, sampling_rate=16000)
         
-        # Get speech timestamps
-        with torch.inference_mode():
-            speech_timestamps = get_speech_timestamps(
-                wav, 
-                model,
-                sampling_rate=16000,
-                threshold=0.5,
-                min_speech_duration_ms=250,
-                min_silence_duration_ms=100
-            )
+        # Get speech timestamps with thread lock
+        with _vad_lock:
+            # Reset model state
+            model.reset_states()
+            
+            with torch.inference_mode():
+                speech_timestamps = get_speech_timestamps(
+                    wav, 
+                    model,
+                    sampling_rate=int(16000),  # Ensure int type
+                    threshold=float(0.5),  # Ensure float type
+                    min_speech_duration_ms=int(250),  # Ensure int type
+                    min_silence_duration_ms=int(100)  # Ensure int type
+                )
         
         if not speech_timestamps:
             return False

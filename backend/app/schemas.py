@@ -55,10 +55,20 @@ class AudioChunkBase(BaseModel):
     start_time: float
     end_time: float
     transcript_text: str
+    speaker_id: Optional[int] = None
+
+class Speaker(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class AudioChunk(AudioChunkBase):
     id: int
     created_at: datetime
+    speaker: Optional[Speaker] = None
 
     class Config:
         from_attributes = True
@@ -93,6 +103,7 @@ class Settings(BaseModel):
 - Only provide the transcribed text without additional commentary."""
     vad_threshold: float = 0.25
     min_speech_duration_ms: int = 250
+    speaker_similarity_threshold: float = 0.75  # Threshold for speaker matching (0.0-1.0)
 
 class ActivityLogBase(BaseModel):
     video_id: Optional[int] = None

@@ -18,7 +18,8 @@ DEFAULT_SETTINGS = {
 - Use punctuation appropriately based on the audio.
 - Only provide the transcribed text without additional commentary.""",
     "vad_threshold": 0.25,
-    "min_speech_duration_ms": 250
+    "min_speech_duration_ms": 250,
+    "speaker_similarity_threshold": 0.75
 }
 
 def get_settings() -> Dict[str, Any]:

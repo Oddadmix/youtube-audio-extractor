@@ -84,6 +84,33 @@ def split_audio_task(self, video_id: int):
         valid_chunks_count = 0
         for c_data in chunks:
             valid_chunks_count += 1
+            
+            # Identify or create speaker for this chunk
+            from ..utils import speaker as speaker_util
+            from ..utils import slack
+            try:
+                speaker = speaker_util.identify_or_create_speaker(
+                    db,
+                    c_data["file_path"],
+                    threshold=processing_settings.get("speaker_similarity_threshold", 0.75)
+                )
+                speaker_id = speaker.id
+                logger.info(f"Chunk assigned to {speaker.name}")
+            except Exception as speaker_err:
+                error_msg = f"Speaker identification failed for chunk {c_data['chunk_id']}: {str(speaker_err)}"
+                logger.error(error_msg)
+                
+                # Send Slack alert
+                slack.notify_slack(
+                    f"⚠️ *Speaker ID Failed*\n"
+                    f"Video: {video.video_id}\n"
+                    f"Chunk: {c_data['chunk_id']}\n"
+                    f"Error: {str(speaker_err)}"
+                )
+                
+                # Continue with NULL speaker_id
+                speaker_id = None
+            
             chunk = models.AudioChunk(
                 chunk_id=c_data["chunk_id"],
                 video_id=video.id,
@@ -91,7 +118,8 @@ def split_audio_task(self, video_id: int):
                 duration=c_data["duration"],
                 start_time=c_data["start_time"],
                 end_time=c_data["end_time"],
-                transcript_text=""
+                transcript_text="",
+                speaker_id=speaker_id
             )
             db.add(chunk)
             
@@ -193,6 +221,33 @@ def reprocess_long_chunks_task(self):
             if new_sub_chunks:
                 # Add new sub-chunks
                 for i, c_data in enumerate(new_sub_chunks):
+                    # Identify speaker for each sub-chunk
+                    from ..utils import speaker as speaker_util
+                    from ..utils import slack
+                    
+                    # Get settings for threshold
+                    settings = settings_util.get_settings()
+                    
+                    try:
+                        speaker = speaker_util.identify_or_create_speaker(
+                            db,
+                            c_data["file_path"],
+                            threshold=settings.get("speaker_similarity_threshold", 0.75)
+                        )
+                        speaker_id = speaker.id
+                    except Exception as speaker_err:
+                        error_msg = f"Speaker identification failed for refined chunk: {str(speaker_err)}"
+                        logger.error(error_msg)
+                        
+                        # Send Slack alert
+                        slack.notify_slack(
+                            f"⚠️ *Speaker ID Failed (Refinement)*\n"
+                            f"Chunk: {c_data['chunk_id']}\n"
+                            f"Error: {str(speaker_err)}"
+                        )
+                        
+                        speaker_id = None
+                    
                     new_chunk = models.AudioChunk(
                         chunk_id=c_data["chunk_id"],
                         video_id=chunk.video_id,
@@ -200,7 +255,8 @@ def reprocess_long_chunks_task(self):
                         duration=c_data["duration"],
                         start_time=chunk.start_time + c_data["start_time"], # Relative offset
                         end_time=chunk.start_time + c_data["end_time"],     # Relative offset
-                        transcript_text=old_transcript # Inherit transcript fragment
+                        transcript_text=old_transcript, # Inherit transcript fragment
+                        speaker_id=speaker_id
                     )
                     db.add(new_chunk)
                 
