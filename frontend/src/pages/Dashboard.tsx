@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getStats, getJobs } from '../api';
+import { getStats, getJobs, clearAllTasks } from '../api';
+import { Trash2 } from 'lucide-react';
 
 const Dashboard = () => {
     const [stats, setStats] = useState<any>(null);
@@ -7,6 +8,10 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = () => {
         Promise.all([getStats(), getJobs()]).then(([statsData, jobsData]) => {
             setStats(statsData);
             setJobs(jobsData);
@@ -15,7 +20,23 @@ const Dashboard = () => {
             console.error(err);
             setLoading(false);
         });
-    }, []);
+    };
+
+    const handleClearTasks = async () => {
+        if (!confirm('Are you sure you want to clear the entire task queue? This will remove all pending tasks and stop active ones including downloads and exports.')) {
+            return;
+        }
+
+        try {
+            const res = await clearAllTasks();
+            alert(res.message);
+            // Reload data to reflect status changes
+            loadData();
+        } catch (err: any) {
+            console.error(err);
+            alert(`Failed to clear queue: ${err.message}`);
+        }
+    };
 
     if (loading) return <div className="card">Loading stats...</div>;
 
@@ -52,7 +73,18 @@ const Dashboard = () => {
             </div>
 
             <div className="card">
-                <h3 style={{ marginBottom: '1.5rem' }}>Recent Activity</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <h3 style={{ margin: 0 }}>Recent Activity</h3>
+                    <button
+                        className="btn"
+                        onClick={handleClearTasks}
+                        style={{ background: 'var(--error)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}
+                        title="Stop all running tasks and clear the waiting queue"
+                    >
+                        <Trash2 size={16} />
+                        Clear Queue
+                    </button>
+                </div>
                 {jobs.length === 0 ? (
                     <p style={{ color: 'var(--text-secondary)' }}>No activity logs yet. Start processing videos or exporting datasets to see activity.</p>
                 ) : (

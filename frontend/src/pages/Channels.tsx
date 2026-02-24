@@ -1,25 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Upload, Play, Square, RotateCcw } from 'lucide-react';
-import { getChannels, createChannel, uploadChannelsFile, triggerChannelProcess, stopChannelProcess, resetChannel } from '../api';
+import { Plus, Upload, Play, Square, RotateCcw, Archive, ArchiveRestore, Eye, EyeOff } from 'lucide-react';
+import { getChannels, createChannel, uploadChannelsFile, triggerChannelProcess, stopChannelProcess, resetChannel, archiveChannel, unarchiveChannel } from '../api';
 
 interface Channel {
     id: number;
     url: string;
     name?: string;
     status: string;
+    archived: boolean;
 }
 
 const Channels = () => {
     const [channels, setChannels] = useState<any[]>([]);
     const [url, setUrl] = useState('');
     const [loading, setLoading] = useState(true);
+    const [showArchived, setShowArchived] = useState(false);
 
     useEffect(() => {
         loadChannels();
-    }, []);
+    }, [showArchived]);
 
     const loadChannels = () => {
-        getChannels().then(setChannels).finally(() => setLoading(false));
+        setLoading(true);
+        getChannels(showArchived).then(setChannels).finally(() => setLoading(false));
     };
 
     const handleAddChannel = async (e: React.FormEvent) => {
@@ -85,6 +88,24 @@ const Channels = () => {
         }
     };
 
+    const handleArchive = async (channel: Channel) => {
+        try {
+            if (channel.archived) {
+                await unarchiveChannel(channel.id);
+            } else {
+                if (confirm('Are you sure you want to archive this channel? It will be excluded from default exports.')) {
+                    await archiveChannel(channel.id);
+                } else {
+                    return;
+                }
+            }
+            loadChannels();
+        } catch (err: any) {
+            console.error(err);
+            alert(`Failed to update archive status: ${err.response?.data?.detail || err.message}`);
+        }
+    };
+
     return (
         <div>
             <h2 style={{ marginBottom: '2rem' }}>Channel Management</h2>
@@ -114,7 +135,21 @@ const Channels = () => {
             </div>
 
             <div className="card">
-                <h3 style={{ marginBottom: '1rem' }}>Monitored Channels</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ margin: 0 }}>
+                        {showArchived ? 'All Channels (Including Archived)' : 'Active Channels'}
+                    </h3>
+
+                    <button
+                        className="btn"
+                        onClick={() => setShowArchived(!showArchived)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}
+                    >
+                        {showArchived ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {showArchived ? 'Hide Archived' : 'Show Archived'}
+                    </button>
+                </div>
+
                 {loading ? <p>Loading channels...</p> : (
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
@@ -126,8 +161,21 @@ const Channels = () => {
                         </thead>
                         <tbody>
                             {channels.map((channel: Channel) => (
-                                <tr key={channel.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                                    <td style={{ padding: '1rem 0' }}>{channel.name || channel.url}</td>
+                                <tr key={channel.id} style={{ borderBottom: '1px solid var(--border)', opacity: channel.archived ? 0.6 : 1 }}>
+                                    <td style={{ padding: '1rem 0' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            {channel.name || channel.url}
+                                            {channel.archived && (
+                                                <span style={{
+                                                    fontSize: '0.7rem',
+                                                    padding: '0.1rem 0.4rem',
+                                                    borderRadius: '4px',
+                                                    background: 'var(--text-secondary)',
+                                                    color: 'var(--bg-card)'
+                                                }}>ARCHIVED</span>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td>
                                         <span style={{
                                             padding: '0.2rem 0.6rem',
@@ -168,6 +216,15 @@ const Channels = () => {
                                             )}
 
                                             <button className="btn" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }} onClick={() => { }}>View Videos</button>
+
+                                            <button
+                                                className="btn"
+                                                style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}
+                                                onClick={() => handleArchive(channel)}
+                                                title={channel.archived ? "Unarchive" : "Archive"}
+                                            >
+                                                {channel.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>

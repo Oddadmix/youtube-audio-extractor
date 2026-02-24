@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 @celery_app.task(bind=True)
-def export_dataset_task(self, job_id: int, repo_id: Optional[str] = None, hf_token: Optional[str] = None, private: bool = True, channel_ids: Optional[list[int]] = None, channel_names: Optional[dict[str, str]] = None):
+def export_dataset_task(self, job_id: int, repo_id: Optional[str] = None, hf_token: Optional[str] = None, private: bool = True, channel_ids: Optional[list[int]] = None, channel_names: Optional[dict[str, str]] = None, include_archived: bool = False):
     """Export processed chunks to a HuggingFace dataset with channel-based subsets."""
     db = database.SessionLocal()
     try:
@@ -22,6 +22,11 @@ def export_dataset_task(self, job_id: int, repo_id: Optional[str] = None, hf_tok
     
         # Get channels
         query = db.query(models.Channel)
+        
+        # Filter archived channels unless explicitly included
+        if not include_archived:
+            query = query.filter(models.Channel.archived == False)
+            
         if channel_ids:
             query = query.filter(models.Channel.id.in_(channel_ids))
             
@@ -69,7 +74,9 @@ def export_dataset_task(self, job_id: int, repo_id: Optional[str] = None, hf_tok
                     "duration": chunk.duration,
                     "original_video_id": chunk.video.video_id,
                     "channel_name": channel_name,
-                    "channel_url": channel.url
+                    "channel_url": channel.url,
+                    "speaker_id": chunk.speaker_id if chunk.speaker_id else None,
+                    "speaker_name": chunk.speaker.name if chunk.speaker else None
                 })
             
             chunks_by_channel[channel_name] = chunks_data

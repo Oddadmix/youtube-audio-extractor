@@ -6,7 +6,7 @@
 # Data & Logs
 data/
 logs/
-
+backend/tmp
 # Python (Backend)
 backend/__pycache__/
 backend/.venv/

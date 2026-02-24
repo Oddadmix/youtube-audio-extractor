@@ -23,8 +23,14 @@ def trigger_reprocess_lengthy(db: Session = Depends(database.get_db)):
     return {"job_id": job.id, "message": "Chunk refinement started"}
 
 @router.get("/stats", response_model=schemas.ChunkStats)
-def get_chunk_stats(db: Session = Depends(database.get_db)):
-    durations = [c[0] for c in db.query(models.AudioChunk.duration).all()]
+def get_chunk_stats(include_archived: bool = False, db: Session = Depends(database.get_db)):
+    query = db.query(models.AudioChunk.duration).join(models.Video).join(models.Channel)
+    
+    if not include_archived:
+        query = query.filter(models.Channel.archived == False)
+        
+    durations = [c[0] for c in query.all()]
+    
     if not durations:
         return {
             "count": 0,
@@ -52,9 +58,14 @@ def read_chunks(
     video_id: Optional[int] = None,
     page: int = 1,
     size: int = 20,
+    include_archived: bool = False,
     db: Session = Depends(database.get_db)
 ):
-    query = db.query(models.AudioChunk)
+    query = db.query(models.AudioChunk).join(models.Video).join(models.Channel)
+    
+    if not include_archived:
+        query = query.filter(models.Channel.archived == False)
+        
     if video_id:
         query = query.filter(models.AudioChunk.video_id == video_id)
     
