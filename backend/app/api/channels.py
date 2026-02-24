@@ -52,8 +52,11 @@ async def upload_channels(file: UploadFile = File(...), db: Session = Depends(da
     return created_channels
 
 @router.get("/", response_model=List[schemas.Channel])
-def read_channels(skip: int = 0, limit: int = 100, db: Session = Depends(database.get_db)):
-    return db.query(models.Channel).offset(skip).limit(limit).all()
+def read_channels(skip: int = 0, limit: int = 100, include_archived: bool = False, db: Session = Depends(database.get_db)):
+    query = db.query(models.Channel)
+    if not include_archived:
+        query = query.filter(models.Channel.archived == False)
+    return query.offset(skip).limit(limit).all()
 
 @router.post("/{channel_id}/process")
 def trigger_process_channel(channel_id: int, db: Session = Depends(database.get_db)):
@@ -97,3 +100,25 @@ def reset_channel(channel_id: int, db: Session = Depends(database.get_db)):
     channel.celery_task_id = None
     db.commit()
     return {"message": "Channel reset"}
+
+@router.patch("/{channel_id}/archive")
+def archive_channel(channel_id: int, db: Session = Depends(database.get_db)):
+    """Archive a channel."""
+    channel = db.query(models.Channel).filter(models.Channel.id == channel_id).first()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    
+    channel.archived = True
+    db.commit()
+    return {"message": "Channel archived successfully"}
+
+@router.patch("/{channel_id}/unarchive")  
+def unarchive_channel(channel_id: int, db: Session = Depends(database.get_db)):
+    """Unarchive a channel."""
+    channel = db.query(models.Channel).filter(models.Channel.id == channel_id).first()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    
+    channel.archived = False
+    db.commit()
+    return {"message": "Channel unarchived successfully"}

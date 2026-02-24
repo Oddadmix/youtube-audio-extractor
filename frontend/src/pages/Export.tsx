@@ -10,6 +10,7 @@ const Export = () => {
     const [repoId, setRepoId] = useState('');
     const [token, setToken] = useState('');
     const [isPrivate, setIsPrivate] = useState(true);
+    const [includeArchived, setIncludeArchived] = useState(false);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -26,10 +27,12 @@ const Export = () => {
     };
 
     const loadChannels = () => {
-        getChannels().then(data => {
+        // Load ALL channels so we can filter locally
+        getChannels(true).then(data => {
             setChannels(data);
-            // Default to selecting all channels
-            setSelectedChannels(data.map((c: any) => c.id));
+            // Default to selecting active channels only
+            const activeChannels = data.filter((c: any) => !c.archived);
+            setSelectedChannels(activeChannels.map((c: any) => c.id));
         });
     };
 
@@ -49,10 +52,22 @@ const Export = () => {
     };
 
     const handleSelectAll = () => {
-        if (selectedChannels.length === channels.length) {
-            setSelectedChannels([]);
+        // Filter visible channels based on includeArchived checkbox
+        const visibleChannels = channels.filter(c => includeArchived || !c.archived);
+
+        // Check if all visible are currently selected
+        const allVisibleSelected = visibleChannels.every(c => selectedChannels.includes(c.id));
+
+        if (allVisibleSelected) {
+            // Deselect all visible
+            const visibleIds = visibleChannels.map(c => c.id);
+            setSelectedChannels(selectedChannels.filter(id => !visibleIds.includes(id)));
         } else {
-            setSelectedChannels(channels.map(c => c.id));
+            // Select all visible
+            const visibleIds = visibleChannels.map(c => c.id);
+            // Merge unique IDs
+            const newSelection = Array.from(new Set([...selectedChannels, ...visibleIds]));
+            setSelectedChannels(newSelection);
         }
     };
 
@@ -77,7 +92,8 @@ const Export = () => {
                 hf_token: token,
                 private: isPrivate,
                 channel_ids: selectedChannels,
-                channel_names: channelNamesStr
+                channel_names: channelNamesStr,
+                include_archived: includeArchived
             });
             loadJobs();
             alert("Export job started!");
@@ -112,6 +128,16 @@ const Export = () => {
                                     {selectedChannels.length === channels.length ? 'Deselect All' : 'Select All'}
                                 </button>
                             </div>
+                            <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={includeArchived}
+                                        onChange={(e) => setIncludeArchived(e.target.checked)}
+                                    />
+                                    Show & Include Archived Channels
+                                </label>
+                            </div>
                             <div style={{
                                 maxHeight: '150px',
                                 overflowY: 'auto',
@@ -120,44 +146,49 @@ const Export = () => {
                                 gap: '0.5rem',
                                 paddingRight: '0.5rem'
                             }}>
-                                {channels.map(channel => (
-                                    <div key={channel.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'space-between' }}>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', flex: 1, overflow: 'hidden' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedChannels.includes(channel.id)}
-                                                onChange={() => toggleChannel(channel.id)}
-                                            />
-                                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                {channel.name || channel.url}
-                                            </span>
-                                        </label>
-
-                                        {/* Custom Name Input */}
-                                        {selectedChannels.includes(channel.id) && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                                                <Edit3 size={14} color="var(--text-secondary)" />
+                                {channels
+                                    .filter(channel => includeArchived || !channel.archived)
+                                    .map(channel => (
+                                        <div key={channel.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'space-between', opacity: channel.archived ? 0.7 : 1 }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', flex: 1, overflow: 'hidden' }}>
                                                 <input
-                                                    type="text"
-                                                    placeholder="Subset Name (optional)"
-                                                    value={customNames[channel.id] || ''}
-                                                    onChange={(e) => handleNameChange(channel.id, e.target.value)}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    style={{
-                                                        padding: '0.2rem 0.4rem',
-                                                        fontSize: '0.8rem',
-                                                        borderRadius: 'var(--radius-sm)',
-                                                        border: '1px solid var(--border)',
-                                                        background: 'var(--bg-main)',
-                                                        color: 'white',
-                                                        width: '140px'
-                                                    }}
+                                                    type="checkbox"
+                                                    checked={selectedChannels.includes(channel.id)}
+                                                    onChange={() => toggleChannel(channel.id)}
                                                 />
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                                {channels.length === 0 && <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>No channels found.</span>}
+                                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {channel.name || channel.url}
+                                                </span>
+                                                {channel.archived && (
+                                                    <span style={{ fontSize: '0.6rem', padding: '0 0.3rem', background: 'var(--text-secondary)', color: 'black', borderRadius: '4px' }}>ARCHIVED</span>
+                                                )}
+                                            </label>
+
+                                            {/* Custom Name Input */}
+                                            {selectedChannels.includes(channel.id) && (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                                    <Edit3 size={14} color="var(--text-secondary)" />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Subset Name (optional)"
+                                                        value={customNames[channel.id] || ''}
+                                                        onChange={(e) => handleNameChange(channel.id, e.target.value)}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        style={{
+                                                            padding: '0.2rem 0.4rem',
+                                                            fontSize: '0.8rem',
+                                                            borderRadius: 'var(--radius-sm)',
+                                                            border: '1px solid var(--border)',
+                                                            background: 'var(--bg-main)',
+                                                            color: 'white',
+                                                            width: '140px'
+                                                        }}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                {channels.filter(c => includeArchived || !c.archived).length === 0 && <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>No channels found.</span>}
                             </div>
                         </div>
 

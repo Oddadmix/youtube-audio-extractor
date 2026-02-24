@@ -42,14 +42,23 @@ async def root():
     return {"message": "Egyptian ASR Dataset Builder API"}
 
 @app.get("/api/stats")
-async def get_stats(db: Session = Depends(database.get_db)):
-    total_videos = db.query(models.Video).count()
-    processed_videos = db.query(models.Video).filter(models.Video.status == "completed").count()
-    failed_videos = db.query(models.Video).filter(models.Video.status == "failed").count()
-    total_chunks = db.query(models.AudioChunk).count()
+async def get_stats(include_archived: bool = False, db: Session = Depends(database.get_db)):
+    video_query = db.query(models.Video).join(models.Channel)
+    if not include_archived:
+        video_query = video_query.filter(models.Channel.archived == False)
+        
+    total_videos = video_query.count()
+    processed_videos = video_query.filter(models.Video.status == "completed").count()
+    failed_videos = video_query.filter(models.Video.status == "failed").count()
+    
+    chunk_query = db.query(models.AudioChunk).join(models.Video).join(models.Channel)
+    if not include_archived:
+        chunk_query = chunk_query.filter(models.Channel.archived == False)
+        
+    total_chunks = chunk_query.count()
     
     # Calculate total duration
-    total_duration = db.query(models.func.sum(models.AudioChunk.duration)).scalar() or 0
+    total_duration = chunk_query.with_entities(models.func.sum(models.AudioChunk.duration)).scalar() or 0
     
     return {
         "total_videos": total_videos,

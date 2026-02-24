@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Text, LargeBinary
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Text, LargeBinary, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -24,6 +24,7 @@ class Channel(Base):
     name = Column(String(255), nullable=True)
     status = Column(String(50), default=Status.PENDING)
     celery_task_id = Column(String(255), nullable=True)
+    archived = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     videos = relationship("Video", back_populates="channel")

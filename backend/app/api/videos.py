@@ -20,9 +20,15 @@ def read_videos(
     size: int = 20,
     sort_by: str = "created_at",
     sort_order: str = "desc",
+    include_archived: bool = False,
     db: Session = Depends(database.get_db)
 ):
-    query = db.query(models.Video).options(joinedload(models.Video.channel))
+    query = db.query(models.Video).options(joinedload(models.Video.channel)).join(models.Channel)
+    
+    # Filter archived channels unless explicitly included
+    if not include_archived:
+        query = query.filter(models.Channel.archived == False)
+        
     if channel_id:
         query = query.filter(models.Video.channel_id == channel_id)
     if status:
@@ -65,10 +71,15 @@ def read_videos(
     }
 
 @router.post("/retry-all")
-def retry_all_videos(db: Session = Depends(database.get_db)):
+def retry_all_videos(include_archived: bool = False, db: Session = Depends(database.get_db)):
     # Rerun everything that isn't currently active (downloading or processing)
     # This now correctly includes 'pending' to allow clearing stuck tasks.
-    videos = db.query(models.Video).filter(models.Video.status.notin_(["downloading", "processing"])).all()
+    query = db.query(models.Video).join(models.Channel).filter(models.Video.status.notin_(["downloading", "processing"]))
+    
+    if not include_archived:
+        query = query.filter(models.Channel.archived == False)
+        
+    videos = query.all()
     triggered_count = 0
     for video in videos:
         video.status = "pending"
@@ -81,12 +92,16 @@ def retry_all_videos(db: Session = Depends(database.get_db)):
     return {"message": f"Retry triggered for {triggered_count} videos"}
 
 @router.post("/retry-failed")
-def retry_failed_videos(db: Session = Depends(database.get_db)):
+def retry_failed_videos(include_archived: bool = False, db: Session = Depends(database.get_db)):
     # Support retrying both failed and pending videos (as promised in the UI)
-    videos_query = db.query(models.Video).filter(models.Video.status.in_(["failed", "pending"]))
+    videos_query = db.query(models.Video).join(models.Channel).filter(models.Video.status.in_(["failed", "pending"]))
+    
+    if not include_archived:
+        videos_query = videos_query.filter(models.Channel.archived == False)
+        
     videos = videos_query.all()
-    count_in_db = videos_query.count()
-    logger.info(f"Retry failed/pending: Found {len(videos)} videos in list, {count_in_db} via count()")
+    count_in_db = len(videos)
+    logger.info(f"Retry failed/pending: Found {len(videos)} videos in list")
     
     triggered_count = 0
     for video in videos:
@@ -162,6 +177,10 @@ def refine_vad_video(video_id: int, db: Session = Depends(database.get_db)):
 @router.post("/cleanup")
 def cleanup_storage(db: Session = Depends(database.get_db)):
     # Target videos that are finished (completed or failed)
+    # Only cleanup non-archived videos by default? No, cleanup should probably clear space regardless.
+    # But let's stick to the prompt: "filter out archived chunks, videos and analytics"
+    # Cleanup is a maintenance task, user probably wants to clean everything or nothing.
+    # I'll leave cleanup as is for now unless specifically asked, as it frees disk space.
     videos = db.query(models.Video).filter(models.Video.status.in_(["completed", "failed"])).all()
     deleted_count = 0
     data_dir = os.path.join(os.getcwd(), "data")

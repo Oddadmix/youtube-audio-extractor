@@ -17,7 +17,9 @@ def create_hf_dataset(chunks_data: List[Dict[str, Any]]):
             "audio": Audio(sampling_rate=16000),
             "transcript_text": Value("string"),
             "duration": Value("float32"),
-            "original_video_id": Value("string")
+            "original_video_id": Value("string"),
+            "speaker_id": Value("int32"),
+            "speaker_name": Value("string")
         })
         
         # Create dataset
@@ -48,7 +50,9 @@ def create_hf_dataset_with_subsets(chunks_by_channel: Dict[str, List[Dict[str, A
             "duration": Value("float32"),
             "original_video_id": Value("string"),
             "channel_name": Value("string"),
-            "channel_url": Value("string")
+            "channel_url": Value("string"),
+            "speaker_id": Value("int32"),
+            "speaker_name": Value("string")
         })
         
         for channel_name, chunks_data in chunks_by_channel.items():

@@ -5,6 +5,7 @@ from datetime import datetime
 class ChannelBase(BaseModel):
     url: str # More permissive than HttpUrl
     name: Optional[str] = None
+    archived: bool = False
 
 class ChannelCreate(ChannelBase):
     pass
