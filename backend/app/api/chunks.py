@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from .. import models, schemas, database
 import os
+import uuid
 
 from ..tasks.process import reprocess_long_chunks_task
 
@@ -11,15 +12,14 @@ router = APIRouter()
 
 @router.post("/reprocess-lengthy")
 def trigger_reprocess_lengthy(db: Session = Depends(database.get_db)):
-    job = models.Job(job_type="maintenance", entity_id="chunk_refinement", status="pending")
+    # Create the job row before queueing so the task can always find and update it.
+    job = models.Job(job_type="maintenance", entity_id="chunk_refinement", status="pending", celery_task_id=str(uuid.uuid4()))
     db.add(job)
     db.commit()
     db.refresh(job)
-    
-    task = reprocess_long_chunks_task.delay()
-    job.celery_task_id = task.id
-    db.commit()
-    
+
+    reprocess_long_chunks_task.apply_async(task_id=job.celery_task_id)
+
     return {"job_id": job.id, "message": "Chunk refinement started"}
 
 @router.get("/stats", response_model=schemas.ChunkStats)

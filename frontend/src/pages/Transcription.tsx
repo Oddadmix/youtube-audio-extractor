@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { triggerTranscription, getJobs, getChannels } from '../api';
-import { Mic, CheckCircle, RefreshCw, Layers } from 'lucide-react';
+import { Mic, RefreshCw, Layers } from 'lucide-react';
+import JobStatus from '../components/JobStatus';
 
 const Transcription = () => {
     const [jobs, setJobs] = useState<any[]>([]);
@@ -143,12 +144,7 @@ const Transcription = () => {
                             {jobs.map(job => (
                                 <tr key={job.id} style={{ borderBottom: '1px solid var(--border)' }}>
                                     <td style={{ padding: '1rem 0' }}>#{job.id}</td>
-                                    <td>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            {job.status === 'completed' ? <CheckCircle size={16} color="var(--success)" /> : <RefreshCw size={16} className="spin" />}
-                                            {job.status}
-                                        </div>
-                                    </td>
+                                    <td style={{ padding: '0.5rem 0' }}><JobStatus job={job} /></td>
                                     <td>{job.progress}%</td>
                                     <td style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{new Date(job.created_at).toLocaleString()}</td>
                                 </tr>

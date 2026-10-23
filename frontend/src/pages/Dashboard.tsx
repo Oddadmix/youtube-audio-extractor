@@ -111,9 +111,15 @@ const Dashboard = () => {
                                     fontSize: '0.8rem',
                                     fontWeight: 600,
                                     color: getStatusColor(job.status),
-                                    textTransform: 'uppercase'
+                                    textTransform: 'uppercase',
+                                    textAlign: 'right'
                                 }}>
-                                    {job.status}
+                                    {job.status === 'pending' ? 'queued' : job.status === 'processing' ? 'running' : job.status}
+                                    {job.error_message && (
+                                        <div title={job.error_message} style={{ fontWeight: 400, textTransform: 'none', maxWidth: '28rem', marginTop: '0.25rem' }}>
+                                            {job.error_message}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}

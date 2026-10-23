@@ -36,7 +36,7 @@ def trigger_transcription(
         
         # Trigger Celery task
         # We pass force_retranscribe from request
-        task = transcribe.transcribe_channel_task.delay(channel.id, request.force_retranscribe)
+        task = transcribe.transcribe_channel_task.delay(channel.id, request.force_retranscribe, job.id, request.chunk_ids)
         
         job.celery_task_id = task.id
         db.commit()

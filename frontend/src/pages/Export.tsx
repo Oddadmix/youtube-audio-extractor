@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { triggerExport, getJobs, getChannels } from '../api';
-import { Download, Share2, CheckCircle, RefreshCw, Layers, Edit3 } from 'lucide-react';
+import { Download, Share2, RefreshCw, Layers, Edit3 } from 'lucide-react';
+import JobStatus from '../components/JobStatus';
 
 const Export = () => {
     const [jobs, setJobs] = useState<any[]>([]);
@@ -247,12 +248,7 @@ const Export = () => {
                         {jobs.map(job => (
                             <tr key={job.id} style={{ borderBottom: '1px solid var(--border)' }}>
                                 <td style={{ padding: '1rem 0' }}>#{job.id}</td>
-                                <td>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        {job.status === 'completed' ? <CheckCircle size={16} color="var(--success)" /> : <RefreshCw size={16} className="spin" />}
-                                        {job.status}
-                                    </div>
-                                </td>
+                                <td style={{ padding: '0.5rem 0' }}><JobStatus job={job} /></td>
                                 <td>{job.progress}%</td>
                                 <td style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>{new Date(job.created_at).toLocaleString()}</td>
                             </tr>

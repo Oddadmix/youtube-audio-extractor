@@ -2,7 +2,7 @@ import os
 from typing import Optional
 from ..celery_app import celery_app
 from .. import models, database
-from ..utils import dataset, logging as activity_log, slack
+from ..utils import dataset, jobs as jobs_util, logging as activity_log, slack
 import logging
 
 logger = logging.getLogger(__name__)
@@ -114,10 +114,13 @@ def export_dataset_task(self, job_id: int, repo_id: Optional[str] = None, hf_tok
                 f"Channel Subsets ({len(chunks_by_channel)}):\n{subset_list}\n"
                 f"Private: {private}"
             )
+        else:
             # Only save locally if NOT pushing to Hub
             data_dir = os.getenv("DATA_PATH", os.path.join(os.getcwd(), "data"))
             export_path = os.path.join(data_dir, "hf_dataset")
             local_path, parquet_path = dataset.save_dataset_locally(hf_dataset, export_path)
+            if not parquet_path:
+                raise Exception("Failed to save dataset locally. Check logs for details.")
             activity_log.log_activity(db, f"Dataset saved locally at {parquet_path}", level="info")
             
         job.status = "completed"
@@ -128,8 +131,7 @@ def export_dataset_task(self, job_id: int, repo_id: Optional[str] = None, hf_tok
         logger.error(f"Error exporting dataset: {e}", exc_info=True)
         if 'job' in locals() and job:
             activity_log.log_activity(db, f"Dataset export failed: {str(e)}", level="error")
-            job.status = "failed"
-            db.commit()
+            jobs_util.update_job(db, job, status="failed", error=str(e))
             
             # Send Slack notification on failure
             slack.notify_slack(

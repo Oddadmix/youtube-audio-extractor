@@ -7,7 +7,18 @@
 data/
 logs/
 backend/tmp
+# Generated audio, datasets and secrets
+*.wav
+*.mp3
+*.m4a
+*.webm
+*.parquet
+*.pem
+*.key
+
 # Python (Backend)
+__pycache__/
+*.pyc
 backend/__pycache__/
 backend/.venv/
 backend/*.pyc

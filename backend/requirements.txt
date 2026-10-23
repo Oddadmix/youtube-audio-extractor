@@ -26,3 +26,4 @@ torch==2.4.1
 torchaudio==2.4.1
 google-genai
 speechbrain==1.0.0
+yt-dlp[default,deno]==2026.10.21

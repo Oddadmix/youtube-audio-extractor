@@ -16,9 +16,10 @@ engine_args = {
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     engine_args["connect_args"] = {"check_same_thread": False, "timeout": 30}
 else:
-    # MySQL specific args can be added here if needed, 
-    # but pool_size/max_overflow are already there
-    pass
+    # Long-lived Celery workers otherwise reuse connections MySQL has already
+    # closed (wait_timeout), failing with "MySQL server has gone away".
+    engine_args["pool_pre_ping"] = True
+    engine_args["pool_recycle"] = 3600
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, 

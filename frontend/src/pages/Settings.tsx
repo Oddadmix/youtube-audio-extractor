@@ -11,6 +11,7 @@ const Settings = () => {
         max_chunk_len: 20, // Store as seconds for UI
         retry_count: 3,
         transcription_prompt: "",
+        transcription_model: "",
         vad_threshold: 0.25,
         min_speech_duration_ms: 250,
         speaker_similarity_threshold: 0.75
@@ -169,6 +170,29 @@ const Settings = () => {
                     <hr style={{ borderColor: 'var(--border)', margin: '1rem 0' }} />
 
                     <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--primary)' }}>Transcription</h3>
+
+                    <div style={{ marginBottom: '1rem' }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Gemini Model</label>
+                        <input
+                            type="text"
+                            name="transcription_model"
+                            value={settings.transcription_model}
+                            onChange={(e) => setSettings(prev => ({ ...prev, transcription_model: e.target.value.trim() }))}
+                            placeholder="gemini-3.8-flash"
+                            style={{
+                                width: '100%',
+                                padding: '0.8rem',
+                                borderRadius: 'var(--radius-md)',
+                                border: '1px solid var(--border)',
+                                background: 'var(--bg-accent)',
+                                color: 'white',
+                                fontFamily: 'monospace'
+                            }}
+                        />
+                        <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.5rem' }}>
+                            Gemini model ID used for transcription. Must accept audio input.
+                        </small>
+                    </div>
 
                     <div>
                         <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>System Prompt</label>

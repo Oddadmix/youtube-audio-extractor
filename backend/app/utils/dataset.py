@@ -1,5 +1,5 @@
 import os
-from datasets import Dataset, DatasetDict, Audio, Features, Value
+from datasets import Dataset, DatasetDict, Audio, Features, Value, concatenate_datasets
 import pandas as pd
 from typing import List, Dict, Any, Optional
 import logging
@@ -98,22 +98,31 @@ def sanitize_config_name(name: str) -> str:
     # Ensure it starts with a word character if possible
     return sanitized or "unknown"
 
+def _embed_audio(ds):
+    """Store audio bytes in the table; otherwise Parquet only holds container-local file paths."""
+    from datasets.table import embed_table_storage
+    return ds.with_format("arrow").map(embed_table_storage, batched=True).with_format(None)
+
 def save_dataset_locally(dataset, output_path: str):
     """Save dataset to disk in both Arrow and Parquet formats."""
     try:
         # Save arrow format
         dataset.save_to_disk(output_path)
-        # Save parquet format
+        # Save parquet format; {output_path}.parquet is what /api/export/download serves
         parquet_path = f"{output_path}.parquet"
         
         # Handle both Dataset and DatasetDict
         if isinstance(dataset, DatasetDict):
-            # For DatasetDict, save each subset
+            # For DatasetDict, save each subset plus one combined file
+            subsets = []
             for config_name, ds in dataset.items():
+                ds = _embed_audio(ds)
                 config_parquet_path = f"{output_path}_{config_name}.parquet"
                 ds.to_parquet(config_parquet_path)
+                subsets.append(ds)
+            concatenate_datasets(subsets).to_parquet(parquet_path)
         else:
-            dataset.to_parquet(parquet_path)
+            _embed_audio(dataset).to_parquet(parquet_path)
             
         return output_path, parquet_path
     except Exception as e:

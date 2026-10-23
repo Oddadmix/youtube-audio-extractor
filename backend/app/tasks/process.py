@@ -1,7 +1,7 @@
 import os
 from ..celery_app import celery_app
 from .. import models, database
-from ..utils import audio, logging as activity_log, settings as settings_util
+from ..utils import audio, jobs as jobs_util, logging as activity_log, settings as settings_util
 import logging
 
 logger = logging.getLogger(__name__)
@@ -69,6 +69,15 @@ def split_audio_task(self, video_id: int):
             vad_threshold=processing_settings.get("vad_threshold", 0.25),
             min_speech_duration_ms=processing_settings.get("min_speech_duration_ms", 250)
         )
+
+        if not chunks:
+            # split_audio_on_vad returns [] both when it finds no speech and when it errors.
+            error_msg = "No speech chunks produced (no speech detected or splitting failed; see worker logs)"
+            activity_log.log_activity(db, error_msg, video_id=video_id, level="error")
+            video.status = "failed"
+            video.error_message = error_msg
+            db.commit()
+            return error_msg
         
         # Load transcript to align (simplified: for now just placeholder alignment)
         # transcript_path = os.path.join(data_dir, f"{video.video_id}_transcript.txt")
@@ -155,8 +164,9 @@ def split_audio_task(self, video_id: int):
             db.commit()
         return str(e)
     finally:
-        # Final cleanup attempt in finally to ensure it runs even if commit fails
-        if 'video' in locals() and video and video.status in ["completed", "failed"]:
+        # Final cleanup attempt in finally to ensure it runs even if commit fails.
+        # Source audio is kept on failure so a long download isn't thrown away.
+        if 'video' in locals() and video and video.status == "completed":
             try:
                 patterns = [
                     f"{video.video_id}_audio.wav",
@@ -183,7 +193,9 @@ def split_audio_task(self, video_id: int):
 def reprocess_long_chunks_task(self):
     """Identify and split chunks that exceed the current max_chunk_len."""
     db = database.SessionLocal()
+    job = jobs_util.get_job(db, celery_task_id=self.request.id)
     try:
+        jobs_util.update_job(db, job, status="processing")
         settings = settings_util.get_settings()
         max_chunk_len = settings.get("max_chunk_len", 20000)
         
@@ -191,6 +203,8 @@ def reprocess_long_chunks_task(self):
         long_chunks = db.query(models.AudioChunk).filter(models.AudioChunk.duration > (max_chunk_len / 1000.0 + 1)).all()
         
         if not long_chunks:
+            jobs_util.update_job(db, job, status="completed", progress=100)
+            db.close()
             return "No lengthy chunks found."
             
         activity_log.log_activity(db, f"Starting refinement for {len(long_chunks)} lengthy chunks...", level="info")
@@ -270,13 +284,15 @@ def reprocess_long_chunks_task(self):
                 db.commit()
                 
         activity_log.log_activity(db, f"Chunk refinement completed. Re-split {len(processed_ids)} giant chunks.", level="success")
-        
+        jobs_util.update_job(db, job, status="completed", progress=100)
+        db.close()
         return f"Refined {len(processed_ids)} chunks."
         
     except Exception as e:
         db.rollback()
         logger.error(f"Error in reprocess_long_chunks: {e}")
         activity_log.log_activity(db, f"Chunk refinement failed: {str(e)}", level="error")
+        jobs_util.update_job(db, job, status="failed", error=str(e))
         db.close()
         raise Exception(str(e))
     db.close()

@@ -85,6 +85,7 @@ class Job(Base):
     status = Column(String(50), default=Status.PENDING)
     progress = Column(Float, default=0)
     error_log_path = Column(String(500), nullable=True)
+    error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

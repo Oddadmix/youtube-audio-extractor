@@ -63,6 +63,7 @@ def clear_all_tasks(db: Session = Depends(database.get_db)):
             except:
                 pass
         job.status = "failed"
+        job.error_message = "Cleared by user"
             
     db.commit()
     

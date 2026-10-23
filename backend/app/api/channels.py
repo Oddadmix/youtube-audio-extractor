@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 import logging
+import uuid
 from sqlalchemy.orm import Session
 from typing import List
 from .. import models, schemas, database
@@ -8,6 +9,16 @@ from ..tasks.download import process_channel_task
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _queue_channel_processing(db: Session, channel_id: int) -> str:
+    """Create the job row before queueing so the task can always find and update it."""
+    task_id = str(uuid.uuid4())
+    db.add(models.Job(job_type="channel_process", entity_id=str(channel_id), status="pending", celery_task_id=task_id))
+    db.commit()
+    process_channel_task.apply_async(args=[channel_id], task_id=task_id)
+    return task_id
+
 
 @router.post("/", response_model=schemas.Channel)
 def create_channel(channel: schemas.ChannelCreate, db: Session = Depends(database.get_db)):
@@ -19,11 +30,7 @@ def create_channel(channel: schemas.ChannelCreate, db: Session = Depends(databas
         db.rollback()
         raise HTTPException(status_code=400, detail="Channel already exists")
     db.refresh(db_channel)
-    task = process_channel_task.delay(db_channel.id)
-    db_channel.celery_task_id = task.id
-    # Create a job record for activity log
-    job = models.Job(job_type="channel_process", entity_id=str(db_channel.id), status="pending", celery_task_id=task.id)
-    db.add(job)
+    db_channel.celery_task_id = _queue_channel_processing(db, db_channel.id)
     db.commit()
     return db_channel
 
@@ -40,11 +47,7 @@ async def upload_channels(file: UploadFile = File(...), db: Session = Depends(da
         try:
             db.commit()
             db.refresh(db_channel)
-            task = process_channel_task.delay(db_channel.id)
-            db_channel.celery_task_id = task.id
-            # Create a job record for activity log
-            job = models.Job(job_type="channel_process", entity_id=str(db_channel.id), status="pending", celery_task_id=task.id)
-            db.add(job)
+            db_channel.celery_task_id = _queue_channel_processing(db, db_channel.id)
             db.commit()
             created_channels.append(db_channel)
         except:
@@ -64,13 +67,10 @@ def trigger_process_channel(channel_id: int, db: Session = Depends(database.get_
     if not channel:
         raise HTTPException(status_code=404, detail="Channel not found")
     
-    task = process_channel_task.delay(channel_id)
-    channel.celery_task_id = task.id
-    # Create a job record for activity log
-    job = models.Job(job_type="channel_process", entity_id=str(channel_id), status="pending", celery_task_id=task.id)
-    db.add(job)
+    task_id = _queue_channel_processing(db, channel_id)
+    channel.celery_task_id = task_id
     db.commit()
-    return {"message": "Processing triggered", "task_id": task.id}
+    return {"message": "Processing triggered", "task_id": task_id}
 
 @router.post("/{channel_id}/stop")
 def stop_process_channel(channel_id: int, db: Session = Depends(database.get_db)):

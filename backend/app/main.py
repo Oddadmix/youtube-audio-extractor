@@ -17,6 +17,8 @@ app = FastAPI(title="Egyptian ASR Dataset Builder")
 
 # Create database tables
 models.Base.metadata.create_all(bind=database.engine)
+from .utils.jobs import ensure_job_columns
+ensure_job_columns(database.engine)
 
 app.add_middleware(
     CORSMiddleware,

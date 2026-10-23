@@ -1,7 +1,7 @@
 import os
 from ..celery_app import celery_app
 from .. import models, database
-from ..utils import youtube, logging as activity_log, slack
+from ..utils import youtube, jobs as jobs_util, logging as activity_log, slack
 import logging
 import urllib.error
 from pytubefix.exceptions import VideoUnavailable, BotDetection
@@ -12,10 +12,13 @@ logger = logging.getLogger(__name__)
 def process_channel_task(self, channel_id: int):
     """Fetch all videos for a channel and queue download tasks."""
     db = database.SessionLocal()
+    job = jobs_util.get_job(db, celery_task_id=self.request.id)
     try:
+        jobs_util.update_job(db, job, status="processing")
         channel = db.query(models.Channel).filter(models.Channel.id == channel_id).first()
         if not channel:
             logger.error(f"Channel with ID {channel_id} not found in database.")
+            jobs_util.update_job(db, job, status="failed", error=f"Channel {channel_id} not found.")
             return "Channel not found"
         
         activity_log.log_activity(db, f"Starting to process channel: {channel.url}", channel_id=channel_id)
@@ -57,10 +60,12 @@ def process_channel_task(self, channel_id: int):
         logger.info(f"Queued {new_videos_count} new videos for downloading from channel {channel_id}.")
         channel.status = "completed"
         db.commit()
+        jobs_util.update_job(db, job, status="completed", progress=100)
         return f"Processed channel {channel_id}, found {len(videos)} videos, queued {new_videos_count} new."
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to process channel {channel_id}: {str(e)}", exc_info=True)
+        jobs_util.update_job(db, job, status="failed", error=str(e))
         if 'channel' in locals() and channel:
             activity_log.log_activity(db, f"Channel processing failed: {str(e)}", channel_id=channel_id, level="error")
             channel.status = "failed"
@@ -134,7 +139,10 @@ def download_video_task(self, video_id: int):
         pause_reason = ""
 
         # Bot Detection
-        if isinstance(e, BotDetection) or "bot" in error_str.lower() and "detected" in error_str.lower():
+        if isinstance(e, youtube.YouTubeAccessError) and e.blocked:
+            critical_error = True
+            pause_reason = "YouTube Bot Detection / Rate Limit"
+        elif isinstance(e, BotDetection) or "bot" in error_str.lower() and "detected" in error_str.lower():
             critical_error = True
             pause_reason = "YouTube Bot Detection"
         
@@ -178,9 +186,15 @@ def download_video_task(self, video_id: int):
         if 'video' in locals() and video:
             video.retry_count += 1
             video.error_message = str(e)
-            if video.retry_count >= 3:
-                activity_log.log_activity(db, f"Download failed after 3 retries: {str(e)}", video_id=video_id, level="error")
+            if isinstance(e, youtube.YouTubeAccessError):
+                # The video itself is unavailable (private, removed, restricted): retrying won't help.
                 video.status = "failed"
+                db.commit()
+                activity_log.log_activity(db, f"Video unavailable, not retrying: {str(e)}", video_id=video_id, level="error")
+            elif video.retry_count >= 3 or self.request.retries >= self.max_retries:
+                video.status = "failed"
+                db.commit()
+                activity_log.log_activity(db, f"Download failed after {video.retry_count} attempts: {str(e)}", video_id=video_id, level="error")
                 
                 # Send Slack notification for final failure
                 slack.notify_slack(
@@ -191,11 +205,12 @@ def download_video_task(self, video_id: int):
                     f"Retries: {video.retry_count}/3"
                 )
             else:
-                activity_log.log_activity(db, f"Download failed (retry {video.retry_count}/3): {str(e)}", video_id=video_id, level="warning")
                 video.status = "pending"
-                # Retry with countdown
+                # Persist status and retry_count before self.retry(), which raises.
+                db.commit()
+                activity_log.log_activity(db, f"Download failed (retry {video.retry_count}/3): {str(e)}", video_id=video_id, level="warning")
                 self.retry(exc=e, countdown=60 * (2 ** video.retry_count))
-            db.commit()
+            
         return str(e)
     finally:
         # Cleanup source files if download failed significantly

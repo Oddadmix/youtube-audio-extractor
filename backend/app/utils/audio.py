@@ -34,8 +34,9 @@ def load_audio_as_tensor(audio_path: str, sampling_rate: int = 16000):
     # Get raw samples as numpy array
     samples = np.array(audio.get_array_of_samples())
     
-    # Convert to float32 and normalize to [-1, 1]
-    samples = samples.astype(np.float32) / 32768.0
+    # Convert to float32 and normalize to [-1, 1] for the file's actual bit depth
+    # (decoded YouTube audio is 32-bit, not 16-bit)
+    samples = samples.astype(np.float32) / float(1 << (8 * audio.sample_width - 1))
     
     tensor = torch.from_numpy(samples)
     logger.info(f"[PID {pid}] Converted to tensor. Shape: {tensor.shape} (Total load time: {time.time() - start_time:.2f}s)")
@@ -56,6 +57,7 @@ def split_audio_on_vad(
     min_speech_duration_ms: int = 250
 ) -> List[Dict[str, Any]]:
     """Split audio into chunks based on VAD speech detection."""
+    os.makedirs(output_dir, exist_ok=True)
     pid = os.getpid()
     try:
         start_time_proc = time.time()

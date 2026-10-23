@@ -1,6 +1,7 @@
 from pydantic import BaseModel, HttpUrl
 from typing import List, Optional
 from datetime import datetime
+from .utils.settings import DEFAULT_SETTINGS
 
 class ChannelBase(BaseModel):
     url: str # More permissive than HttpUrl
@@ -20,6 +21,8 @@ class ExportRequest(BaseModel):
 class TranscribeRequest(BaseModel):
     channel_ids: List[int]
     force_retranscribe: bool = False
+    # Restrict the run to these chunk IDs (e.g. a single-chunk test); None means all.
+    chunk_ids: Optional[List[int]] = None
 
 class Channel(ChannelBase):
     id: int
@@ -84,6 +87,7 @@ class Job(JobBase):
     status: str
     progress: float
     error_log_path: Optional[str] = None
+    error_message: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -102,6 +106,7 @@ class Settings(BaseModel):
 - Don't convert to formal Arabic.
 - Use punctuation appropriately based on the audio.
 - Only provide the transcribed text without additional commentary."""
+    transcription_model: str = DEFAULT_SETTINGS["transcription_model"]
     vad_threshold: float = 0.25
     min_speech_duration_ms: int = 250
     speaker_similarity_threshold: float = 0.75  # Threshold for speaker matching (0.0-1.0)
